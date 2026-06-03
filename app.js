@@ -97,6 +97,7 @@ function parseMoney(value) {
 function inferAddressFromPostal(postalCode) {
   const sector = postalCode.slice(0, 2);
   const sectorTown = {
+    "51": "PASIR RIS",
     "52": "TAMPINES",
     "56": "ANG MO KIO",
     "73": "WOODLANDS",
@@ -135,10 +136,22 @@ async function getLiveAnalysisData({ postalCode, flatType, storeyRange }) {
       storeyRange
     });
   } catch (error) {
-    liveLookupError = error.message;
+    liveLookupError = getFriendlyLookupError(error.message);
     console.info("Live analysis unavailable, using browser fallback.", error);
     return null;
   }
+}
+
+function getFriendlyLookupError(message) {
+  if (message.includes("UrlFetchApp.fetch") || message.includes("script.external_request")) {
+    return "Google Apps Script needs permission for external API requests. Run authorizeSetup() in Apps Script, approve permissions, then redeploy.";
+  }
+
+  if (message.includes("OneMap credentials are missing")) {
+    return "OneMap credentials are missing in Google Apps Script properties.";
+  }
+
+  return message;
 }
 
 function loadJsonp(url, params) {
