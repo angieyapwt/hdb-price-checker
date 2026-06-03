@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HDB Price Position Checker</title>
+    <meta name="description" content="Check where your HDB target selling price stands against recent public resale transactions.">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">HDB resale pricing insight</p>
+          <h1>HDB Price Position Checker</h1>
+          <p class="hero-text">Enter your postal code and target selling price to see how your asking price compares against recent HDB resale transactions.</p>
+        </div>
+        <div class="trust-strip" aria-label="Report highlights">
+          <span>From Data.gov.sg</span>
+          <span>Instant PDF report</span>
+          <span>No Spam</span>
+        </div>
+      </section>
+
+      <section class="checker-grid" aria-label="Price checker">
+        <form class="panel form-panel" id="checkerForm">
+          <div class="panel-heading">
+            <p class="section-kicker">Step 1</p>
+            <h2>Check your price</h2>
+          </div>
+
+          <label class="field">
+            <span>Postal code</span>
+            <input id="postalCode" name="postalCode" inputmode="numeric" autocomplete="postal-code" maxlength="6" placeholder="e.g. 520123" required>
+          </label>
+
+          <div class="field-row">
+            <label class="field">
+              <span>Flat type</span>
+              <select id="flatType" name="flatType" required>
+                <option value="2 ROOM">2-room</option>
+                <option value="3 ROOM">3-room</option>
+                <option value="4 ROOM" selected>4-room</option>
+                <option value="5 ROOM">5-room</option>
+                <option value="EXECUTIVE">Executive</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Floor range</span>
+              <select id="storeyRange" name="storeyRange" required>
+                <option value="01 TO 03">01 to 03</option>
+                <option value="04 TO 06">04 to 06</option>
+                <option value="07 TO 09">07 to 09</option>
+                <option value="10 TO 12" selected>10 to 12</option>
+                <option value="13 TO 15">13 to 15</option>
+                <option value="16 TO 18">16 to 18</option>
+                <option value="19 TO 21">19 to 21</option>
+                <option value="22 TO 24">22 to 24</option>
+              </select>
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Your intended selling price</span>
+            <div class="currency-input">
+              <span>$</span>
+              <input id="targetPrice" name="targetPrice" inputmode="numeric" placeholder="720,000" required>
+            </div>
+          </label>
+
+          <button class="primary-button" type="submit">Generate price position</button>
+          <p class="form-note">Preview uses current-style public HDB resale fields with sample postal-code mapping. Production can connect OneMap for full postal lookup.</p>
+        </form>
+
+        <section class="panel result-panel" id="resultPanel" aria-live="polite">
+          <div class="empty-state" id="emptyState">
+            <p class="section-kicker">Step 2</p>
+            <h2>Your analysis appears here</h2>
+            <p>Results are shown as a clear market position, then packaged into a professional PDF report after the contact details are submitted.</p>
+          </div>
+
+          <div class="results hidden" id="results">
+            <div class="result-header">
+              <div>
+                <p class="section-kicker">Price position</p>
+                <h2 id="positionTitle">Fair Market</h2>
+              </div>
+              <div class="score-ring" aria-label="Market confidence score">
+                <strong id="confidenceScore">78</strong>
+                <span>/100</span>
+              </div>
+            </div>
+
+            <div class="meter" aria-hidden="true">
+              <div id="meterFill"></div>
+            </div>
+
+            <div class="cards">
+              <article class="metric-card">
+                <span>Your Asking Price vs Recent Market</span>
+                <strong id="priceComparison">$720,000 vs $650,000 - $705,000</strong>
+                <p id="comparisonCopy">Your price is within the current negotiation zone.</p>
+              </article>
+              <article class="metric-card">
+                <span>Latest Transaction Near You</span>
+                <strong id="latestTransaction">$688,000</strong>
+                <p id="latestCopy">4-room, Tampines, 10 to 12, May 2026</p>
+              </article>
+              <article class="metric-card">
+                <span>Price Gap Analysis</span>
+                <strong id="priceGap">+$18,000</strong>
+                <p id="gapCopy">Compared with the median nearby transaction.</p>
+              </article>
+              <article class="metric-card">
+                <span>Market Confidence Score</span>
+                <strong id="scoreCopy">78 / 100</strong>
+                <p id="confidenceCopy">Supported by recent transaction evidence.</p>
+              </article>
+            </div>
+
+            <div class="insight-box">
+              <p class="section-kicker">Advisory insight</p>
+              <p id="insightCopy">Your target price appears realistic based on nearby HDB resale transactions, subject to unit condition, floor level, facing, renovation quality, and current buyer demand.</p>
+            </div>
+
+            <form class="lead-form" id="leadForm">
+              <div class="panel-heading">
+                <p class="section-kicker">Step 3</p>
+                <h2>Download your PDF report</h2>
+              </div>
+              <div class="field-row">
+                <label class="field">
+                  <span>Name</span>
+                  <input id="leadName" name="leadName" autocomplete="name" required>
+                </label>
+                <label class="field">
+                  <span>Email</span>
+                  <input id="leadEmail" name="leadEmail" type="email" autocomplete="email" required>
+                </label>
+              </div>
+              <label class="field">
+                <span>Mobile number</span>
+                <input id="leadMobile" name="leadMobile" inputmode="tel" autocomplete="tel" required>
+              </label>
+              <div class="consent-note">
+                <strong>Instant download notice</strong>
+                <p>By downloading this report, you agree that your submitted details and price-check inputs will be logged for this report and may be used to contact you about your HDB price enquiry. Your PDF will download immediately. For urgent questions, contact 83963088.</p>
+              </div>
+              <button class="secondary-button" type="submit">Download PDF report</button>
+              <p class="form-note">No spam. Your details are used only for this HDB price-check enquiry and follow-up.</p>
+            </form>
+          </div>
+        </section>
+      </section>
+
+      <section class="report-preview">
+        <div>
+          <p class="section-kicker">Professional report</p>
+          <h2>Minimal, advisory, and built for trust</h2>
+          <p>The PDF mirrors the website theme: white space, clean typography, concise market explanation, and clear next steps without hard-selling.</p>
+        </div>
+        <div class="preview-sheet" aria-hidden="true">
+          <div class="sheet-line wide"></div>
+          <div class="sheet-line"></div>
+          <div class="sheet-card"></div>
+          <div class="sheet-grid">
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
