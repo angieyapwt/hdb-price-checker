@@ -69,7 +69,7 @@
           </label>
 
           <button class="primary-button" type="submit">Generate price position</button>
-          <p class="form-note">Preview uses current-style public HDB resale fields with sample postal-code mapping. Production can connect OneMap for full postal lookup.</p>
+          <p class="form-note">Uses OneMap postal lookup and data.gov.sg resale transactions when the Google Apps Script endpoint is connected.</p>
         </form>
 
         <section class="panel result-panel" id="resultPanel" aria-live="polite">
@@ -84,6 +84,7 @@
               <div>
                 <p class="section-kicker">Price position</p>
                 <h2 id="positionTitle">Fair Market</h2>
+                <p class="matched-address" id="matchedAddress">Matched address appears here</p>
               </div>
               <div class="score-ring" aria-label="Market confidence score">
                 <strong id="confidenceScore">78</strong>

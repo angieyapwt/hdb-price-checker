@@ -30,6 +30,7 @@ const sampleTransactions = [
 ];
 
 let activeReport = null;
+let liveLookupError = "";
 
 const form = document.querySelector("#checkerForm");
 const leadForm = document.querySelector("#leadForm");
@@ -51,9 +52,18 @@ form.addEventListener("submit", async (event) => {
 
   if (!postalCode || !targetPrice) return;
 
-  const address = postalDirectory[postalCode] || inferAddressFromPostal(postalCode);
-  const transactions = await getTransactions(address, flatType);
+  const liveData = await getLiveAnalysisData({ postalCode, flatType, storeyRange });
+  const hasLiveRecords = !!(liveData?.transactions && liveData.transactions.length);
+  const address = liveData?.address || postalDirectory[postalCode] || inferAddressFromPostal(postalCode);
+  const transactions = hasLiveRecords ? liveData.transactions : await getTransactions(address, flatType);
   const analysis = analysePrice({ postalCode, address, flatType, storeyRange, targetPrice, transactions });
+  analysis.dataSource = hasLiveRecords
+    ? `Live OneMap + data.gov.sg match: ${liveData.matchLevel || "town"} level, ${liveData.transactionCount || transactions.length} records`
+    : liveData
+      ? `Preview fallback: live lookup found the address but no matching ${flatType.toLowerCase()} resale records`
+      : GOOGLE_SCRIPT_URL
+      ? `Preview fallback: ${liveLookupError || "live lookup did not return data"}`
+      : "Preview fallback: Google Apps Script URL is not connected";
 
   activeReport = analysis;
   renderAnalysis(analysis);
@@ -111,6 +121,62 @@ async function getTransactions(address, flatType) {
   const streetSamples = sampleTransactions.filter((item) => item.street_name === address.street && item.flat_type === flatType);
   if (streetSamples.length) return streetSamples;
   return sampleTransactions.filter((item) => item.town === address.town && item.flat_type === flatType);
+}
+
+async function getLiveAnalysisData({ postalCode, flatType, storeyRange }) {
+  if (!GOOGLE_SCRIPT_URL) return null;
+  liveLookupError = "";
+
+  try {
+    return await loadJsonp(GOOGLE_SCRIPT_URL, {
+      action: "analyze",
+      postalCode,
+      flatType,
+      storeyRange
+    });
+  } catch (error) {
+    liveLookupError = error.message;
+    console.info("Live analysis unavailable, using browser fallback.", error);
+    return null;
+  }
+}
+
+function loadJsonp(url, params) {
+  return new Promise((resolve, reject) => {
+    const callbackName = `hdbCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script = document.createElement("script");
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Live lookup timed out"));
+    }, 12000);
+
+    const requestUrl = new URL(url);
+    Object.entries(params).forEach(([key, value]) => requestUrl.searchParams.set(key, value));
+    requestUrl.searchParams.set("callback", callbackName);
+
+    window[callbackName] = (data) => {
+      cleanup();
+      if (data?.error) {
+        reject(new Error(data.error));
+        return;
+      }
+      resolve(data);
+    };
+
+    script.onerror = () => {
+      cleanup();
+      reject(new Error("Live lookup failed"));
+    };
+
+    function cleanup() {
+      window.clearTimeout(timeout);
+      delete window[callbackName];
+      script.remove();
+    }
+
+    script.src = requestUrl.toString();
+    document.body.appendChild(script);
+  });
 }
 
 async function fetchTransactions(filters) {
@@ -205,6 +271,7 @@ function renderAnalysis(report) {
   results.classList.remove("hidden");
 
   document.querySelector("#positionTitle").textContent = report.position;
+  document.querySelector("#matchedAddress").textContent = `${titleCase(report.address.block)} ${titleCase(report.address.street)}, ${titleCase(report.address.town)} | ${report.dataSource}`;
   document.querySelector("#confidenceScore").textContent = report.score;
   document.querySelector("#meterFill").style.width = `${report.score}%`;
   document.querySelector("#priceComparison").textContent = `${money(report.targetPrice)} vs ${money(report.min)} - ${money(report.max)}`;
@@ -347,6 +414,7 @@ function createPdf(report) {
   writer.text("Latest Comparable Transaction", 54, 610, 14, ink, true);
   const latestLine = `${titleCase(report.latest.flat_type)} flat at ${titleCase(report.latest.town)}, ${report.latest.storey_range}, ${monthLabel(report.latest.month)}, ${report.latest.remaining_lease || "remaining lease unavailable"}`;
   writer.wrap(latestLine, 54, 636, 487, 11, muted, 16);
+  writer.wrap("Data source: " + (report.dataSource || "Public resale transaction comparison"), 54, 676, 487, 9, muted, 13);
 
   writer.line(54, 704, 541, 704, line);
   writer.wrap("Prepared using public HDB resale transaction fields from data.gov.sg. Resale prices are indicative and final pricing should also consider unit condition, renovation, facing, floor level, ethnic quota, buyer demand, and competing supply.", 54, 728, 487, 9, muted, 13);
