@@ -328,6 +328,18 @@ h2 {
   line-height: 1.12;
 }
 
+.price-stack span,
+.price-stack small {
+  display: block;
+}
+
+.price-stack small {
+  margin: 6px 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
 .metric-card p,
 .insight-box p {
   margin-bottom: 0;
@@ -370,67 +382,8 @@ h2 {
   line-height: 1.5;
 }
 
-.report-preview {
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(260px, 0.55fr);
-  align-items: center;
-  gap: 28px;
-  border-top: 1px solid var(--line);
-  padding: 48px clamp(20px, 5vw, 72px) 72px;
-}
-
-.report-preview p {
-  max-width: 640px;
-  color: var(--muted);
-  line-height: 1.55;
-}
-
-.preview-sheet {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: var(--shadow);
-  padding: 28px;
-  aspect-ratio: 0.78;
-}
-
-.sheet-line,
-.sheet-card,
-.sheet-grid span {
-  border-radius: 4px;
-  background: #e6edff;
-}
-
-.sheet-line {
-  width: 58%;
-  height: 12px;
-  margin-bottom: 12px;
-}
-
-.sheet-line.wide {
-  width: 82%;
-  height: 22px;
-}
-
-.sheet-card {
-  height: 120px;
-  margin: 26px 0;
-  background: var(--accent-soft);
-}
-
-.sheet-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-.sheet-grid span {
-  height: 58px;
-}
-
 @media (max-width: 900px) {
-  .checker-grid,
-  .report-preview {
+  .checker-grid {
     grid-template-columns: 1fr;
   }
 

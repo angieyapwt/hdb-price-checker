@@ -251,28 +251,31 @@ function percentile(values, p) {
 }
 
 function getConfidenceScore(target, median, p25, p75, min, max) {
-  if (target >= p25 && target <= p75) return 88;
-  if (target >= min && target <= max) return 76;
+  if (target >= median * 0.97 && target <= median * 1.03) return 90;
+  if (target < median && target >= min) return 84;
+  if (target < min) return 72;
+  if (target > median && target <= p75) return 82;
+  if (target > p75 && target <= max) return 72;
   if (target > max && target <= max * 1.05) return 64;
   if (target > max && target <= max * 1.12) return 48;
-  if (target < min) return 70;
   return 34;
 }
 
 function getPosition(target, median, p25, p75, min, max) {
-  if (target < min) return "Below Market";
-  if (target >= p25 && target <= p75) return "Fair Market";
-  if (target <= max) return "Slightly Ambitious";
+  if (target < median) return "Below Market";
+  if (target >= median * 0.97 && target <= median * 1.03) return "Fair Market";
+  if (target <= p75) return "Fair Market";
+  if (target <= max) return "Slightly Above Market";
   if (target <= max * 1.08) return "Ambitious";
   return "High Risk";
 }
 
 function getInsight(position, pctVsMedian) {
-  const premium = Math.abs(pctVsMedian * 100).toFixed(1);
+  const percentageGap = Math.abs(pctVsMedian * 100).toFixed(1);
   const insights = {
-    "Below Market": `Your target price sits below recent transaction evidence. This can attract more buyer attention, but you may want to confirm that you are not leaving value on the table before listing.`,
+    "Below Market": `Your target price is about ${percentageGap}% below the median of the comparison set. This can attract more buyer attention, but you may want to confirm that you are not leaving value on the table before listing.`,
     "Fair Market": `Your target price is aligned with recent HDB resale transactions. This is a realistic range if your unit condition, floor level, layout, and presentation are competitive.`,
-    "Slightly Ambitious": `Your target price is above the middle of recent transactions by about ${premium}%. It may still be achievable if the unit has strong attributes such as higher floor, better facing, strong renovation condition, or convenient amenities.`,
+    "Slightly Above Market": `Your target price is about ${percentageGap}% above the median of the comparison set. It may still be achievable if the unit has strong attributes such as higher floor, better facing, strong renovation condition, or convenient amenities.`,
     "Ambitious": `Your target price is above recent market evidence. A premium may be possible, but buyers will need clear reasons to justify it, and the listing strategy must be more deliberate.`,
     "High Risk": `Your target price is meaningfully above recent transaction support. This may reduce buyer enquiries unless the unit has standout qualities or the market has moved ahead of the latest registered transactions.`
   };
@@ -284,18 +287,20 @@ function renderAnalysis(report) {
   results.classList.remove("hidden");
 
   document.querySelector("#positionTitle").textContent = report.position;
-  document.querySelector("#matchedAddress").textContent = `${titleCase(report.address.block)} ${titleCase(report.address.street)}, ${titleCase(report.address.town)} | ${report.dataSource}`;
+  document.querySelector("#matchedAddress").textContent = formatMatchLine(report);
   document.querySelector("#confidenceScore").textContent = report.score;
   document.querySelector("#meterFill").style.width = `${report.score}%`;
-  document.querySelector("#priceComparison").textContent = `${money(report.targetPrice)} vs ${money(report.min)} - ${money(report.max)}`;
+  document.querySelector("#priceComparison").innerHTML = `<span>${money(report.targetPrice)}</span><small>vs</small><span>${money(report.min)} - ${money(report.max)}</span>`;
 
   const topGap = report.targetPrice - report.max;
   document.querySelector("#comparisonCopy").textContent = topGap > 0
     ? `Your price is ${percent(topGap / report.max)} above the top recent transaction in this comparison set.`
+    : report.targetPrice < report.median
+    ? `Your price is ${percent((report.median - report.targetPrice) / report.median)} below the median of this comparison set.`
     : "Your price sits within the recent transaction range.";
 
   document.querySelector("#latestTransaction").textContent = money(Number(report.latest.resale_price));
-  document.querySelector("#latestCopy").textContent = `${titleCase(report.latest.flat_type)}, ${titleCase(report.latest.town)}, ${report.latest.storey_range}, ${monthLabel(report.latest.month)}`;
+  document.querySelector("#latestCopy").innerHTML = `${titleCase(report.latest.flat_type)}, ${titleCase(report.latest.town)},<br>${report.latest.storey_range}, ${monthLabel(report.latest.month)}`;
   document.querySelector("#priceGap").textContent = `${report.gap >= 0 ? "+" : "-"}${money(Math.abs(report.gap))}`;
   document.querySelector("#gapCopy").textContent = `Compared with the median nearby transaction of ${money(report.median)}.`;
   document.querySelector("#scoreCopy").textContent = `${report.score} / 100`;
@@ -309,6 +314,16 @@ function getScoreCopy(score) {
   if (score >= 55) return "Possible, but the evidence is more selective.";
   if (score >= 40) return "Higher asking price risk.";
   return "Weak support from recent transactions.";
+}
+
+function formatMatchLine(report) {
+  const address = `${titleCase(report.address.block)} ${titleCase(report.address.street)}`.trim();
+  const town = titleCase(report.address.town);
+  const source = report.dataSource?.startsWith("Live OneMap")
+    ? "Live OneMap + data.gov.sg match"
+    : report.dataSource || "Preview fallback";
+
+  return `${address} | ${town} | ${source}`;
 }
 
 function saveLead(report) {
