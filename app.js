@@ -118,6 +118,7 @@ function parseMoney(value) {
 function inferAddressFromPostal(postalCode) {
   const sector = postalCode.slice(0, 2);
   const sectorTown = {
+    "09": "BUKIT MERAH",
     "51": "PASIR RIS",
     "52": "TAMPINES",
     "56": "ANG MO KIO",
