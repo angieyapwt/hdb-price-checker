@@ -189,7 +189,7 @@ function loadJsonp(url, params) {
     const timeout = window.setTimeout(() => {
       cleanup();
       reject(new Error("Live lookup timed out"));
-    }, 12000);
+    }, 45000);
 
     const requestUrl = new URL(url);
     Object.entries(params).forEach(([key, value]) => requestUrl.searchParams.set(key, value));
