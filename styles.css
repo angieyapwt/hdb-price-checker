@@ -270,6 +270,14 @@ h2 {
   color: var(--ink);
 }
 
+.error-state {
+  border-left: 4px solid var(--danger);
+}
+
+.error-state .section-kicker {
+  color: var(--danger);
+}
+
 .hidden {
   display: none;
 }
@@ -390,7 +398,7 @@ h2 {
 
 .analysis-tools {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
+  grid-template-columns: 1fr;
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -410,6 +418,10 @@ h2 {
   align-items: center;
   gap: 12px;
   margin: 12px 0 16px;
+}
+
+.range-card {
+  overflow: hidden;
 }
 
 .range-values strong,
@@ -456,6 +468,12 @@ h2 {
   color: var(--accent-deep);
   font-size: 0.76rem;
   font-weight: 800;
+}
+
+.position-bar i.is-edge::before {
+  left: auto;
+  right: 0;
+  transform: none;
 }
 
 .range-labels {
@@ -534,7 +552,7 @@ h2 {
 .consent-note {
   border: 1px solid var(--line);
   border-radius: 8px;
-  margin: 4px 0 16px;
+  margin: 14px 0 0;
   padding: 14px 16px;
   background: var(--accent-soft);
 }

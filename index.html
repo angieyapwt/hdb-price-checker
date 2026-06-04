@@ -72,7 +72,7 @@
             <span class="button-label">Generate price position</span>
             <span class="button-spinner" aria-hidden="true"></span>
           </button>
-          <p class="form-note">Uses OneMap postal lookup and data.gov.sg resale transactions when the Google Apps Script endpoint is connected.</p>
+          <p class="form-note">Uses OneMap postal lookup and data.gov.sg resale transactions.</p>
         </form>
 
         <section class="panel result-panel" id="resultPanel" aria-live="polite">
@@ -80,6 +80,12 @@
             <p class="section-kicker">Step 2</p>
             <h2>Your analysis appears here</h2>
             <p>Results are shown as a clear market position, then packaged into a professional PDF report after the contact details are submitted.</p>
+          </div>
+
+          <div class="empty-state error-state hidden" id="errorState">
+            <p class="section-kicker">Unable to retrieve data</p>
+            <h2>Live data lookup failed</h2>
+            <p id="errorCopy">We could not retrieve OneMap or data.gov.sg records for this check. Please try again shortly.</p>
           </div>
 
           <div class="results hidden" id="results">
@@ -183,12 +189,11 @@
                 <span>Mobile number</span>
                 <input id="leadMobile" name="leadMobile" inputmode="tel" autocomplete="tel" required>
               </label>
-              <div class="consent-note">
-                <strong>Instant download notice</strong>
-                <p>By downloading this report, you agree that your submitted details and price-check inputs will be logged for this report and may be used to contact you about your HDB price enquiry. Your PDF will download immediately. For urgent questions, contact 83963088.</p>
-              </div>
               <button class="secondary-button" type="submit">Download PDF report</button>
-              <p class="form-note">No spam. Your details are used only for this HDB price-check enquiry and follow-up.</p>
+              <p class="form-note">Your PDF will be download immediately.</p>
+              <div class="consent-note">
+                <p>By downloading this report, you agree that your submitted details and price-check inputs will be logged for this report and may be used to contact you about your HDB price enquiry.</p>
+              </div>
             </form>
           </div>
         </section>

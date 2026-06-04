@@ -37,6 +37,7 @@ const liveAnalysisCache = new Map();
 const form = document.querySelector("#checkerForm");
 const leadForm = document.querySelector("#leadForm");
 const emptyState = document.querySelector("#emptyState");
+const errorState = document.querySelector("#errorState");
 const results = document.querySelector("#results");
 const targetPriceInput = document.querySelector("#targetPrice");
 const generateButton = document.querySelector("#generateButton");
@@ -55,22 +56,24 @@ form.addEventListener("submit", async (event) => {
 
   if (!postalCode || !targetPrice) return;
 
+  errorState.classList.add("hidden");
   setLoading(true);
   try {
     const liveData = await getLiveAnalysisData({ postalCode, flatType, storeyRange });
     const hasLiveRecords = !!(liveData?.transactions && liveData.transactions.length);
-    const address = liveData?.address || postalDirectory[postalCode] || inferAddressFromPostal(postalCode);
-    const transactions = hasLiveRecords ? liveData.transactions : await getTransactions(address, flatType);
+    if (!hasLiveRecords) {
+      showLookupError(liveData
+        ? `Live lookup found the address, but data.gov.sg did not return matching ${flatType.toLowerCase()} resale transactions for this check.`
+        : liveLookupError || "Unable to retrieve live OneMap or data.gov.sg data.");
+      return;
+    }
+
+    const address = liveData.address;
+    const transactions = liveData.transactions;
     const analysis = analysePrice({ postalCode, address, flatType, storeyRange, targetPrice, transactions });
-    analysis.matchLevel = hasLiveRecords ? liveData.matchLevel : "fallback";
-    analysis.transactionCount = hasLiveRecords ? liveData.transactionCount || transactions.length : transactions.length;
-    analysis.dataSource = hasLiveRecords
-      ? `Live OneMap + data.gov.sg match: ${liveData.matchLevel || "town"} level, ${liveData.transactionCount || transactions.length} records`
-      : liveData
-        ? `Preview fallback: live lookup found the address but no matching ${flatType.toLowerCase()} resale records`
-        : GOOGLE_SCRIPT_URL
-        ? `Preview fallback: ${liveLookupError || "live lookup did not return data"}`
-        : "Preview fallback: Google Apps Script URL is not connected";
+    analysis.matchLevel = liveData.matchLevel;
+    analysis.transactionCount = liveData.transactionCount || transactions.length;
+    analysis.dataSource = `Live OneMap + data.gov.sg match: ${liveData.matchLevel || "town"} level, ${liveData.transactionCount || transactions.length} records`;
 
     activeReport = analysis;
     activeReportDownloaded = false;
@@ -327,6 +330,7 @@ function roundToThousand(value) {
 
 function renderAnalysis(report) {
   emptyState.classList.add("hidden");
+  errorState.classList.add("hidden");
   results.classList.remove("hidden");
   const downloadButton = leadForm.querySelector("button[type='submit']");
   downloadButton.disabled = false;
@@ -355,9 +359,18 @@ function renderAnalysis(report) {
   document.querySelector("#rangeLow").textContent = money(report.p25);
   document.querySelector("#rangeHigh").textContent = money(report.p75);
   document.querySelector("#priceMarker").style.left = `${getMarkerPosition(report.targetPrice, report.min, report.max)}%`;
+  document.querySelector("#priceMarker").classList.toggle("is-edge", getMarkerPosition(report.targetPrice, report.min, report.max) > 88);
   document.querySelector("#negotiationRange").textContent = `${money(report.negotiation.lower)} - ${money(report.negotiation.upper)}`;
   document.querySelector("#negotiationCopy").textContent = getNegotiationCopy(report);
   renderTransactions(report);
+}
+
+function showLookupError(message) {
+  activeReport = null;
+  results.classList.add("hidden");
+  emptyState.classList.add("hidden");
+  errorState.classList.remove("hidden");
+  document.querySelector("#errorCopy").textContent = message;
 }
 
 function getScoreCopy(score) {
@@ -373,7 +386,7 @@ function formatMatchLine(report) {
   const town = titleCase(report.address.town);
   const source = report.dataSource?.startsWith("Live OneMap")
     ? "Live OneMap + data.gov.sg match"
-    : report.dataSource || "Preview fallback";
+    : report.dataSource || "Live data unavailable";
 
   return `${address} | ${town} | ${source}`;
 }
