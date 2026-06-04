@@ -68,7 +68,10 @@
             </div>
           </label>
 
-          <button class="primary-button" type="submit">Generate price position</button>
+          <button class="primary-button" id="generateButton" type="submit">
+            <span class="button-label">Generate price position</span>
+            <span class="button-spinner" aria-hidden="true"></span>
+          </button>
           <p class="form-note">Uses OneMap postal lookup and data.gov.sg resale transactions when the Google Apps Script endpoint is connected.</p>
         </form>
 
@@ -127,6 +130,39 @@
               <p class="section-kicker">Advisory insight</p>
               <p id="insightCopy">Your target price appears realistic based on nearby HDB resale transactions, subject to unit condition, floor level, facing, renovation quality, and current buyer demand.</p>
             </div>
+
+            <div class="analysis-tools">
+              <article class="range-card">
+                <p class="section-kicker">Price position bar</p>
+                <div class="range-values">
+                  <strong id="rangeLow">$650,000</strong>
+                  <span>to</span>
+                  <strong id="rangeHigh">$705,000</strong>
+                </div>
+                <div class="position-bar" aria-label="Price position bar">
+                  <i id="priceMarker"></i>
+                </div>
+                <div class="range-labels">
+                  <span>Below market</span>
+                  <span>Fair</span>
+                  <span>Above market</span>
+                </div>
+              </article>
+
+              <article class="negotiation-card">
+                <p class="section-kicker">Suggested negotiation range</p>
+                <strong id="negotiationRange">$552,000 - $582,000</strong>
+                <p id="negotiationCopy">Based on the current comparison set, this gives room for negotiation while staying close to recent evidence.</p>
+              </article>
+            </div>
+
+            <section class="transactions-panel">
+              <div class="section-heading-row">
+                <p class="section-kicker" id="transactionsTitle">Recent sales in this area</p>
+                <span id="transactionsCount">10 records</span>
+              </div>
+              <div class="transactions-list" id="transactionsList"></div>
+            </section>
 
             <form class="lead-form" id="leadForm">
               <div class="panel-heading">

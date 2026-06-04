@@ -31,12 +31,15 @@ const sampleTransactions = [
 
 let activeReport = null;
 let liveLookupError = "";
+let activeReportDownloaded = false;
+const liveAnalysisCache = new Map();
 
 const form = document.querySelector("#checkerForm");
 const leadForm = document.querySelector("#leadForm");
 const emptyState = document.querySelector("#emptyState");
 const results = document.querySelector("#results");
 const targetPriceInput = document.querySelector("#targetPrice");
+const generateButton = document.querySelector("#generateButton");
 
 targetPriceInput.addEventListener("input", () => {
   const digits = targetPriceInput.value.replace(/\D/g, "");
@@ -52,26 +55,38 @@ form.addEventListener("submit", async (event) => {
 
   if (!postalCode || !targetPrice) return;
 
-  const liveData = await getLiveAnalysisData({ postalCode, flatType, storeyRange });
-  const hasLiveRecords = !!(liveData?.transactions && liveData.transactions.length);
-  const address = liveData?.address || postalDirectory[postalCode] || inferAddressFromPostal(postalCode);
-  const transactions = hasLiveRecords ? liveData.transactions : await getTransactions(address, flatType);
-  const analysis = analysePrice({ postalCode, address, flatType, storeyRange, targetPrice, transactions });
-  analysis.dataSource = hasLiveRecords
-    ? `Live OneMap + data.gov.sg match: ${liveData.matchLevel || "town"} level, ${liveData.transactionCount || transactions.length} records`
-    : liveData
-      ? `Preview fallback: live lookup found the address but no matching ${flatType.toLowerCase()} resale records`
-      : GOOGLE_SCRIPT_URL
-      ? `Preview fallback: ${liveLookupError || "live lookup did not return data"}`
-      : "Preview fallback: Google Apps Script URL is not connected";
+  setLoading(true);
+  try {
+    const liveData = await getLiveAnalysisData({ postalCode, flatType, storeyRange });
+    const hasLiveRecords = !!(liveData?.transactions && liveData.transactions.length);
+    const address = liveData?.address || postalDirectory[postalCode] || inferAddressFromPostal(postalCode);
+    const transactions = hasLiveRecords ? liveData.transactions : await getTransactions(address, flatType);
+    const analysis = analysePrice({ postalCode, address, flatType, storeyRange, targetPrice, transactions });
+    analysis.matchLevel = hasLiveRecords ? liveData.matchLevel : "fallback";
+    analysis.transactionCount = hasLiveRecords ? liveData.transactionCount || transactions.length : transactions.length;
+    analysis.dataSource = hasLiveRecords
+      ? `Live OneMap + data.gov.sg match: ${liveData.matchLevel || "town"} level, ${liveData.transactionCount || transactions.length} records`
+      : liveData
+        ? `Preview fallback: live lookup found the address but no matching ${flatType.toLowerCase()} resale records`
+        : GOOGLE_SCRIPT_URL
+        ? `Preview fallback: ${liveLookupError || "live lookup did not return data"}`
+        : "Preview fallback: Google Apps Script URL is not connected";
 
-  activeReport = analysis;
-  renderAnalysis(analysis);
+    activeReport = analysis;
+    activeReportDownloaded = false;
+    renderAnalysis(analysis);
+  } finally {
+    setLoading(false);
+  }
 });
 
 leadForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (!activeReport) return;
+  if (!activeReport || activeReportDownloaded) return;
+
+  const downloadButton = leadForm.querySelector("button[type='submit']");
+  downloadButton.disabled = true;
+  downloadButton.textContent = "Preparing PDF...";
 
   const lead = {
     name: document.querySelector("#leadName").value.trim(),
@@ -81,9 +96,12 @@ leadForm.addEventListener("submit", async (event) => {
   };
 
   const report = { ...activeReport, lead };
+  const pdf = createPdf(report);
+  activeReportDownloaded = true;
   saveLead(report);
-  await sendLeadToSheet(report);
-  downloadPdf(report);
+  await sendLeadToSheet(report, pdf);
+  downloadPdf(report, pdf);
+  downloadButton.textContent = "PDF downloaded";
 });
 
 function cleanPostal(value) {
@@ -127,14 +145,21 @@ async function getTransactions(address, flatType) {
 async function getLiveAnalysisData({ postalCode, flatType, storeyRange }) {
   if (!GOOGLE_SCRIPT_URL) return null;
   liveLookupError = "";
+  const cacheKey = `${postalCode}|${flatType}|${storeyRange}`;
+  const cached = liveAnalysisCache.get(cacheKey);
+  if (cached && Date.now() - cached.createdAt < 10 * 60 * 1000) {
+    return cached.data;
+  }
 
   try {
-    return await loadJsonp(GOOGLE_SCRIPT_URL, {
+    const data = await loadJsonp(GOOGLE_SCRIPT_URL, {
       action: "analyze",
       postalCode,
       flatType,
       storeyRange
     });
+    liveAnalysisCache.set(cacheKey, { createdAt: Date.now(), data });
+    return data;
   } catch (error) {
     liveLookupError = getFriendlyLookupError(error.message);
     console.info("Live analysis unavailable, using browser fallback.", error);
@@ -220,8 +245,9 @@ function analysePrice(input) {
   const gap = input.targetPrice - median;
   const pctVsMedian = median ? gap / median : 0;
   const pctVsTop = max ? (input.targetPrice - max) / max : 0;
-  const score = getConfidenceScore(input.targetPrice, median, p25, p75, min, max);
   const position = getPosition(input.targetPrice, median, p25, p75, min, max);
+  const score = getConfidenceScore(input.targetPrice, median, p25, p75, min, max, position);
+  const negotiation = getNegotiationRange(input.targetPrice, median, position);
 
   return {
     ...input,
@@ -237,6 +263,7 @@ function analysePrice(input) {
     pctVsTop,
     score,
     position,
+    negotiation,
     insight: getInsight(position, pctVsMedian)
   };
 }
@@ -250,15 +277,17 @@ function percentile(values, p) {
   return values[lower] + (values[upper] - values[lower]) * (index - lower);
 }
 
-function getConfidenceScore(target, median, p25, p75, min, max) {
-  if (target >= median * 0.97 && target <= median * 1.03) return 90;
-  if (target < median && target >= min) return 84;
-  if (target < min) return 72;
-  if (target > median && target <= p75) return 82;
-  if (target > p75 && target <= max) return 72;
-  if (target > max && target <= max * 1.05) return 64;
-  if (target > max && target <= max * 1.12) return 48;
-  return 34;
+function getConfidenceScore(target, median, p25, p75, min, max, position) {
+  const gapPct = median ? Math.abs((target - median) / median) : 0;
+  const scoreByPosition = {
+    "Below Market": target < min ? 94 : Math.max(82, 94 - Math.round(gapPct * 30)),
+    "Fair Market": 90,
+    "Slightly Above Market": Math.max(66, 78 - Math.round(gapPct * 35)),
+    "Ambitious": Math.max(48, 64 - Math.round(gapPct * 45)),
+    "High Risk": Math.max(24, 44 - Math.round(gapPct * 55))
+  };
+
+  return Math.min(96, Math.max(24, scoreByPosition[position] || 60));
 }
 
 function getPosition(target, median, p25, p75, min, max) {
@@ -282,9 +311,26 @@ function getInsight(position, pctVsMedian) {
   return insights[position];
 }
 
+function getNegotiationRange(target, median, position) {
+  const lowerMultiplier = position === "Below Market" ? 0.98 : position === "Fair Market" ? 0.96 : 0.93;
+  const upperMultiplier = position === "Below Market" ? 1.04 : position === "Fair Market" ? 1.02 : 0.98;
+  const evidenceFloor = median * 0.86;
+  const lower = roundToThousand(Math.max(evidenceFloor, target * lowerMultiplier));
+  const upper = roundToThousand(Math.max(lower + 5000, target * upperMultiplier));
+
+  return { lower, upper };
+}
+
+function roundToThousand(value) {
+  return Math.round(value / 1000) * 1000;
+}
+
 function renderAnalysis(report) {
   emptyState.classList.add("hidden");
   results.classList.remove("hidden");
+  const downloadButton = leadForm.querySelector("button[type='submit']");
+  downloadButton.disabled = false;
+  downloadButton.textContent = "Download PDF report";
 
   document.querySelector("#positionTitle").textContent = report.position;
   document.querySelector("#matchedAddress").textContent = formatMatchLine(report);
@@ -306,13 +352,19 @@ function renderAnalysis(report) {
   document.querySelector("#scoreCopy").textContent = `${report.score} / 100`;
   document.querySelector("#confidenceCopy").textContent = getScoreCopy(report.score);
   document.querySelector("#insightCopy").textContent = report.insight;
+  document.querySelector("#rangeLow").textContent = money(report.p25);
+  document.querySelector("#rangeHigh").textContent = money(report.p75);
+  document.querySelector("#priceMarker").style.left = `${getMarkerPosition(report.targetPrice, report.min, report.max)}%`;
+  document.querySelector("#negotiationRange").textContent = `${money(report.negotiation.lower)} - ${money(report.negotiation.upper)}`;
+  document.querySelector("#negotiationCopy").textContent = getNegotiationCopy(report);
+  renderTransactions(report);
 }
 
 function getScoreCopy(score) {
-  if (score >= 85) return "Strongly supported by transaction data.";
-  if (score >= 70) return "Realistic but still needs good positioning.";
-  if (score >= 55) return "Possible, but the evidence is more selective.";
-  if (score >= 40) return "Higher asking price risk.";
+  if (score >= 88) return "Strong transaction support.";
+  if (score >= 75) return "Good support from recent transactions.";
+  if (score >= 60) return "Moderate support; positioning matters.";
+  if (score >= 45) return "Selective support; stronger justification needed.";
   return "Weak support from recent transactions.";
 }
 
@@ -324,6 +376,52 @@ function formatMatchLine(report) {
     : report.dataSource || "Preview fallback";
 
   return `${address} | ${town} | ${source}`;
+}
+
+function getMarkerPosition(target, min, max) {
+  if (!min || !max || max === min) return 50;
+  const paddedMin = min - (max - min) * 0.1;
+  const paddedMax = max + (max - min) * 0.1;
+  return Math.max(0, Math.min(100, ((target - paddedMin) / (paddedMax - paddedMin)) * 100));
+}
+
+function getNegotiationCopy(report) {
+  const gapText = percent(Math.abs(report.pctVsMedian));
+  if (report.position === "Below Market") {
+    return `Based on ${gapText} below the median. This range protects value while staying attractive against recent transactions.`;
+  }
+
+  if (report.position === "Fair Market") {
+    return `Based on recent transaction support. This range leaves room for negotiation while staying close to market evidence.`;
+  }
+
+  return `Based on ${gapText} above the median. Aim to justify the premium, or leave room for buyer negotiation.`;
+}
+
+function renderTransactions(report) {
+  const transactions = [...report.transactions]
+    .sort((a, b) => String(b.month).localeCompare(String(a.month)))
+    .slice(0, 8);
+
+  document.querySelector("#transactionsTitle").textContent = `Recent sales in ${titleCase(report.address.town || "this area")}`;
+  document.querySelector("#transactionsCount").textContent = `${transactions.length} records`;
+  document.querySelector("#transactionsList").innerHTML = transactions.map((item) => `
+    <div class="transaction-row">
+      <div>
+        <strong>Blk ${safe(item.block)} ${titleCase(item.street_name || item.town)}</strong>
+        <p>${safe(item.storey_range)} &middot; ${safe(item.remaining_lease || "remaining lease unavailable")} &middot; ${monthLabel(item.month)}</p>
+      </div>
+      <div class="transaction-price">${money(Number(item.resale_price))}</div>
+    </div>
+  `).join("");
+}
+
+function setLoading(isLoading) {
+  generateButton.classList.toggle("is-loading", isLoading);
+  generateButton.disabled = isLoading;
+  generateButton.querySelector(".button-label").textContent = isLoading
+    ? "Retrieving live data..."
+    : "Generate price position";
 }
 
 function saveLead(report) {
@@ -341,7 +439,7 @@ function saveLead(report) {
   localStorage.setItem("hdb_price_checker_leads", JSON.stringify(logs));
 }
 
-async function sendLeadToSheet(report) {
+async function sendLeadToSheet(report, pdf) {
   if (!GOOGLE_SCRIPT_URL) return;
 
   const payload = {
@@ -365,7 +463,10 @@ async function sendLeadToSheet(report) {
     latestTransactionPrice: Number(report.latest.resale_price),
     latestTransactionMonth: report.latest.month,
     priceGapVsMedian: report.gap,
+    suggestedNegotiationRange: `${money(report.negotiation.lower)} - ${money(report.negotiation.upper)}`,
     advisoryInsight: report.insight,
+    pdfFileName: `HDB-Price-Position-Report-${report.postalCode}.pdf`,
+    pdfBase64: btoa(pdf),
     sourcePage: window.location.href
   };
 
@@ -382,8 +483,7 @@ async function sendLeadToSheet(report) {
   }
 }
 
-function downloadPdf(report) {
-  const pdf = createPdf(report);
+function downloadPdf(report, pdf) {
   const blob = new Blob([pdf], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -424,7 +524,7 @@ function createPdf(report) {
   const metrics = [
     ["Recent Market Range", money(report.min) + " - " + money(report.max)],
     ["Median Nearby Price", money(report.median)],
-    ["Latest Transaction", money(Number(report.latest.resale_price))],
+    ["Suggested Range", money(report.negotiation.lower) + " - " + money(report.negotiation.upper)],
     ["Price Gap vs Median", (report.gap >= 0 ? "+" : "-") + money(Math.abs(report.gap))]
   ];
   let y = 292;
@@ -442,7 +542,8 @@ function createPdf(report) {
   writer.text("Latest Comparable Transaction", 54, 610, 14, ink, true);
   const latestLine = `${titleCase(report.latest.flat_type)} flat at ${titleCase(report.latest.town)}, ${report.latest.storey_range}, ${monthLabel(report.latest.month)}, ${report.latest.remaining_lease || "remaining lease unavailable"}`;
   writer.wrap(latestLine, 54, 636, 487, 11, muted, 16);
-  writer.wrap("Data source: " + (report.dataSource || "Public resale transaction comparison"), 54, 676, 487, 9, muted, 13);
+  writer.wrap("Suggested negotiation range: " + money(report.negotiation.lower) + " - " + money(report.negotiation.upper), 54, 666, 487, 10, muted, 14);
+  writer.wrap("Data source: " + (report.dataSource || "Public resale transaction comparison"), 54, 688, 487, 9, muted, 13);
 
   writer.line(54, 704, 541, 704, line);
   writer.wrap("Prepared using public HDB resale transaction fields from data.gov.sg. Resale prices are indicative and final pricing should also consider unit condition, renovation, facing, floor level, ethnic quota, buyer demand, and competing supply.", 54, 728, 487, 9, muted, 13);
