@@ -3,7 +3,8 @@ const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby6lrlclwzN1U
 const BACKEND_PROXY_URL = "/api/hdb";
 const OWNER_EMAIL = "angieyapwt@gmail.com";
 const URGENT_CONTACT = "83963088";
-const LIVE_LOOKUP_TIMEOUT_MS = 90000;
+const LIVE_LOOKUP_TIMEOUT_MS = 45000;
+const PROXY_LOOKUP_TIMEOUT_MS = 35000;
 const LIVE_LOOKUP_RETRIES = 0;
 
 const postalDirectory = {
@@ -160,10 +161,13 @@ async function getLiveAnalysisData({ postalCode, flatType, storeyRange }) {
     return cached.data;
   }
 
-  const proxyData = await getLiveAnalysisViaProxy({ postalCode, flatType, storeyRange });
-  if (proxyData) {
-    liveAnalysisCache.set(cacheKey, { createdAt: Date.now(), data: proxyData });
-    return proxyData;
+  if (shouldUseBackendProxy()) {
+    const proxyData = await getLiveAnalysisViaProxy({ postalCode, flatType, storeyRange });
+    if (proxyData) {
+      liveAnalysisCache.set(cacheKey, { createdAt: Date.now(), data: proxyData });
+      return proxyData;
+    }
+    return null;
   }
 
   for (let attempt = 0; attempt <= LIVE_LOOKUP_RETRIES; attempt += 1) {
@@ -189,6 +193,9 @@ async function getLiveAnalysisData({ postalCode, flatType, storeyRange }) {
 async function getLiveAnalysisViaProxy({ postalCode, flatType, storeyRange }) {
   if (!shouldUseBackendProxy()) return null;
 
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), PROXY_LOOKUP_TIMEOUT_MS);
+
   try {
     const requestUrl = new URL(BACKEND_PROXY_URL, window.location.href);
     requestUrl.searchParams.set("action", "analyze");
@@ -200,7 +207,8 @@ async function getLiveAnalysisViaProxy({ postalCode, flatType, storeyRange }) {
     const response = await fetch(requestUrl.toString(), {
       method: "GET",
       cache: "no-store",
-      headers: { "Accept": "application/json" }
+      headers: { "Accept": "application/json" },
+      signal: controller.signal
     });
 
     if (!response.ok) throw new Error(`Proxy lookup failed (${response.status})`);
@@ -208,9 +216,13 @@ async function getLiveAnalysisViaProxy({ postalCode, flatType, storeyRange }) {
     if (data?.error) throw new Error(data.error);
     return data;
   } catch (error) {
-    liveLookupError = getFriendlyLookupError(error.message);
+    liveLookupError = getFriendlyLookupError(error.name === "AbortError"
+      ? "Backend proxy lookup timed out"
+      : error.message);
     console.info("Backend proxy lookup unavailable.", error);
     return null;
+  } finally {
+    window.clearTimeout(timeout);
   }
 }
 
@@ -226,6 +238,14 @@ function getFriendlyLookupError(message) {
 
   if (message.includes("OneMap credentials are missing")) {
     return "OneMap credentials are missing in Google Apps Script properties.";
+  }
+
+  if (message.includes("Proxy lookup failed (404)") || message.includes("Proxy lookup failed (405)")) {
+    return "The Netlify backend proxy is not connected yet. Check that netlify.toml is in the repository root and netlify/functions/hdb-proxy.js is deployed.";
+  }
+
+  if (message.includes("Backend proxy lookup timed out")) {
+    return "The Netlify backend proxy took too long to respond. Please check the Netlify Function logs for /api/hdb.";
   }
 
   return message;
