@@ -91,6 +91,8 @@ leadForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!activeReport || activeReportDownloaded) return;
 
+  if (!validateLeadForm()) return;
+
   const downloadButton = leadForm.querySelector("button[type='submit']");
   downloadButton.disabled = true;
   downloadButton.textContent = "Preparing PDF...";
@@ -111,12 +113,46 @@ leadForm.addEventListener("submit", async (event) => {
   downloadButton.textContent = "PDF downloaded";
 });
 
+document.querySelector("#leadEmail").addEventListener("input", (event) => {
+  event.target.setCustomValidity("");
+});
+
+document.querySelector("#leadMobile").addEventListener("input", (event) => {
+  event.target.value = event.target.value.replace(/\D/g, "").slice(0, 8);
+  event.target.setCustomValidity("");
+});
+
 function cleanPostal(value) {
   return value.replace(/\D/g, "").slice(0, 6);
 }
 
 function parseMoney(value) {
   return Number(String(value).replace(/[^\d.]/g, ""));
+}
+
+function validateLeadForm() {
+  const emailInput = document.querySelector("#leadEmail");
+  const mobileInput = document.querySelector("#leadMobile");
+  const email = emailInput.value.trim();
+  const mobile = mobileInput.value.replace(/\D/g, "");
+  const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
+  const mobileIsValid = /^[89]\d{7}$/.test(mobile);
+
+  emailInput.setCustomValidity(emailIsValid ? "" : "Please enter a valid email address.");
+  mobileInput.setCustomValidity(mobileIsValid ? "" : "Please enter a valid Singapore mobile number. It must start with 8 or 9 and have 8 digits.");
+
+  if (!emailIsValid) {
+    emailInput.reportValidity();
+    return false;
+  }
+
+  if (!mobileIsValid) {
+    mobileInput.reportValidity();
+    return false;
+  }
+
+  mobileInput.value = mobile;
+  return true;
 }
 
 function inferAddressFromPostal(postalCode) {

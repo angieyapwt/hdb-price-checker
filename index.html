@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>HDB Price Position Checker</title>
     <meta name="description" content="Check where your HDB target selling price stands against recent public resale transactions.">
-    <link rel="stylesheet" href="styles.css?v=20260605-proxy-3">
+    <link rel="stylesheet" href="styles.css?v=20260605-lead-validation-1">
   </head>
   <body>
     <main class="page-shell">
@@ -177,12 +177,12 @@
                 </label>
                 <label class="field">
                   <span>Email</span>
-                  <input id="leadEmail" name="leadEmail" type="email" autocomplete="email" required>
+                  <input id="leadEmail" name="leadEmail" type="email" autocomplete="email" placeholder="name@email.com" required>
                 </label>
               </div>
               <label class="field">
                 <span>Mobile number</span>
-                <input id="leadMobile" name="leadMobile" inputmode="tel" autocomplete="tel" required>
+                <input id="leadMobile" name="leadMobile" inputmode="numeric" autocomplete="tel" maxlength="8" pattern="[89][0-9]{7}" placeholder="8 digits, starts with 8 or 9" required>
               </label>
               <button class="secondary-button" type="submit">Download PDF report</button>
               <p class="form-note">Dont Worry. It's Free. Your PDF will be download immediately.</p>
@@ -196,6 +196,6 @@
 
     </main>
 
-    <script src="app.js?v=20260605-proxy-3"></script>
+    <script src="app.js?v=20260605-lead-validation-1"></script>
   </body>
 </html>
