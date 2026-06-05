@@ -2,6 +2,8 @@ const DATASET_ID = "d_8b84c4ee58e3cfc0ece0d773c8ca6abc";
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby6lrlclwzN1Uk8C86L8MyeI0OUbKZCo5axKFRc3UQZPLLnXN1RGgFDQWnP1pMqkqVXxw/exec";
 const OWNER_EMAIL = "angieyapwt@gmail.com";
 const URGENT_CONTACT = "83963088";
+const LIVE_LOOKUP_TIMEOUT_MS = 90000;
+const LIVE_LOOKUP_RETRIES = 1;
 
 const postalDirectory = {
   "520123": { block: "123", street: "TAMPINES STREET 11", town: "TAMPINES" },
@@ -157,20 +159,24 @@ async function getLiveAnalysisData({ postalCode, flatType, storeyRange }) {
     return cached.data;
   }
 
-  try {
-    const data = await loadJsonp(GOOGLE_SCRIPT_URL, {
-      action: "analyze",
-      postalCode,
-      flatType,
-      storeyRange
-    });
-    liveAnalysisCache.set(cacheKey, { createdAt: Date.now(), data });
-    return data;
-  } catch (error) {
-    liveLookupError = getFriendlyLookupError(error.message);
-    console.info("Live analysis unavailable, using browser fallback.", error);
-    return null;
+  for (let attempt = 0; attempt <= LIVE_LOOKUP_RETRIES; attempt += 1) {
+    try {
+      const data = await loadJsonp(GOOGLE_SCRIPT_URL, {
+        action: "analyze",
+        postalCode,
+        flatType,
+        storeyRange
+      }, LIVE_LOOKUP_TIMEOUT_MS);
+      liveAnalysisCache.set(cacheKey, { createdAt: Date.now(), data });
+      return data;
+    } catch (error) {
+      liveLookupError = getFriendlyLookupError(error.message);
+      console.info(`Live analysis attempt ${attempt + 1} unavailable.`, error);
+      if (attempt === LIVE_LOOKUP_RETRIES) return null;
+    }
   }
+
+  return null;
 }
 
 function getFriendlyLookupError(message) {
@@ -185,14 +191,14 @@ function getFriendlyLookupError(message) {
   return message;
 }
 
-function loadJsonp(url, params) {
+function loadJsonp(url, params, timeoutMs = LIVE_LOOKUP_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const callbackName = `hdbCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const script = document.createElement("script");
     const timeout = window.setTimeout(() => {
       cleanup();
       reject(new Error("Live lookup timed out"));
-    }, 45000);
+    }, timeoutMs);
 
     const requestUrl = new URL(url);
     Object.entries(params).forEach(([key, value]) => requestUrl.searchParams.set(key, value));
