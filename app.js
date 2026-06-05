@@ -193,9 +193,6 @@ async function getLiveAnalysisData({ postalCode, flatType, storeyRange }) {
 async function getLiveAnalysisViaProxy({ postalCode, flatType, storeyRange }) {
   if (!shouldUseBackendProxy()) return null;
 
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), PROXY_LOOKUP_TIMEOUT_MS);
-
   try {
     const requestUrl = new URL(BACKEND_PROXY_URL, window.location.href);
     requestUrl.searchParams.set("action", "analyze");
@@ -204,25 +201,24 @@ async function getLiveAnalysisViaProxy({ postalCode, flatType, storeyRange }) {
     requestUrl.searchParams.set("storeyRange", storeyRange);
     requestUrl.searchParams.set("_", Date.now());
 
-    const response = await fetch(requestUrl.toString(), {
+    const request = fetch(requestUrl.toString(), {
       method: "GET",
       cache: "no-store",
-      headers: { "Accept": "application/json" },
-      signal: controller.signal
+      headers: { "Accept": "application/json" }
     });
+    const timeout = new Promise((_, reject) => {
+      window.setTimeout(() => reject(new Error("Backend proxy lookup timed out")), PROXY_LOOKUP_TIMEOUT_MS);
+    });
+    const response = await Promise.race([request, timeout]);
 
     if (!response.ok) throw new Error(`Proxy lookup failed (${response.status})`);
     const data = await response.json();
     if (data?.error) throw new Error(data.error);
     return data;
   } catch (error) {
-    liveLookupError = getFriendlyLookupError(error.name === "AbortError"
-      ? "Backend proxy lookup timed out"
-      : error.message);
+    liveLookupError = getFriendlyLookupError(error.message);
     console.info("Backend proxy lookup unavailable.", error);
     return null;
-  } finally {
-    window.clearTimeout(timeout);
   }
 }
 
