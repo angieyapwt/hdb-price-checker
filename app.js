@@ -1,8 +1,10 @@
 const DATASET_ID = "d_8b84c4ee58e3cfc0ece0d773c8ca6abc";
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby6lrlclwzN1Uk8C86L8MyeI0OUbKZCo5axKFRc3UQZPLLnXN1RGgFDQWnP1pMqkqVXxw/exec";
+const BACKEND_PROXY_URL = "/api/hdb";
 const OWNER_EMAIL = "angieyapwt@gmail.com";
 const URGENT_CONTACT = "83963088";
-const LIVE_LOOKUP_TIMEOUT_MS = 90000;
+const LIVE_LOOKUP_TIMEOUT_MS = 45000;
+const PROXY_LOOKUP_TIMEOUT_MS = 35000;
 const LIVE_LOOKUP_RETRIES = 0;
 
 const postalDirectory = {
@@ -151,12 +153,21 @@ async function getTransactions(address, flatType) {
 }
 
 async function getLiveAnalysisData({ postalCode, flatType, storeyRange }) {
-  if (!GOOGLE_SCRIPT_URL) return null;
+  if (!GOOGLE_SCRIPT_URL && !BACKEND_PROXY_URL) return null;
   liveLookupError = "";
   const cacheKey = `${postalCode}|${flatType}|${storeyRange}`;
   const cached = liveAnalysisCache.get(cacheKey);
   if (cached && Date.now() - cached.createdAt < 10 * 60 * 1000) {
     return cached.data;
+  }
+
+  if (shouldUseBackendProxy()) {
+    const proxyData = await getLiveAnalysisViaProxy({ postalCode, flatType, storeyRange });
+    if (proxyData) {
+      liveAnalysisCache.set(cacheKey, { createdAt: Date.now(), data: proxyData });
+      return proxyData;
+    }
+    return null;
   }
 
   for (let attempt = 0; attempt <= LIVE_LOOKUP_RETRIES; attempt += 1) {
@@ -179,6 +190,47 @@ async function getLiveAnalysisData({ postalCode, flatType, storeyRange }) {
   return null;
 }
 
+async function getLiveAnalysisViaProxy({ postalCode, flatType, storeyRange }) {
+  if (!shouldUseBackendProxy()) return null;
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), PROXY_LOOKUP_TIMEOUT_MS);
+
+  try {
+    const requestUrl = new URL(BACKEND_PROXY_URL, window.location.href);
+    requestUrl.searchParams.set("action", "analyze");
+    requestUrl.searchParams.set("postalCode", postalCode);
+    requestUrl.searchParams.set("flatType", flatType);
+    requestUrl.searchParams.set("storeyRange", storeyRange);
+    requestUrl.searchParams.set("_", Date.now());
+
+    const response = await fetch(requestUrl.toString(), {
+      method: "GET",
+      cache: "no-store",
+      headers: { "Accept": "application/json" },
+      signal: controller.signal
+    });
+
+    if (!response.ok) throw new Error(`Proxy lookup failed (${response.status})`);
+    const data = await response.json();
+    if (data?.error) throw new Error(data.error);
+    return data;
+  } catch (error) {
+    liveLookupError = getFriendlyLookupError(error.name === "AbortError"
+      ? "Backend proxy lookup timed out"
+      : error.message);
+    console.info("Backend proxy lookup unavailable.", error);
+    return null;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+function shouldUseBackendProxy() {
+  if (!BACKEND_PROXY_URL) return false;
+  return !["localhost", "127.0.0.1"].includes(window.location.hostname);
+}
+
 function getFriendlyLookupError(message) {
   if (message.includes("UrlFetchApp.fetch") || message.includes("script.external_request")) {
     return "Google Apps Script needs permission for external API requests. Run authorizeSetup() in Apps Script, approve permissions, then redeploy.";
@@ -186,6 +238,14 @@ function getFriendlyLookupError(message) {
 
   if (message.includes("OneMap credentials are missing")) {
     return "OneMap credentials are missing in Google Apps Script properties.";
+  }
+
+  if (message.includes("Proxy lookup failed (404)") || message.includes("Proxy lookup failed (405)")) {
+    return "The Netlify backend proxy is not connected yet. Check that netlify.toml is in the repository root and netlify/functions/hdb-proxy.js is deployed.";
+  }
+
+  if (message.includes("Backend proxy lookup timed out")) {
+    return "The Netlify backend proxy took too long to respond. Please check the Netlify Function logs for /api/hdb.";
   }
 
   return message;
@@ -471,7 +531,7 @@ function saveLead(report) {
 }
 
 async function sendLeadToSheet(report, pdf) {
-  if (!GOOGLE_SCRIPT_URL) return;
+  if (!GOOGLE_SCRIPT_URL && !BACKEND_PROXY_URL) return;
 
   const payload = {
     submittedAt: report.lead.submittedAt,
@@ -502,6 +562,20 @@ async function sendLeadToSheet(report, pdf) {
   };
 
   try {
+    if (shouldUseBackendProxy()) {
+      const response = await fetch(new URL(BACKEND_PROXY_URL, window.location.href).toString(), {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload),
+        keepalive: true
+      });
+
+      if (response.ok) return;
+    }
+
     await fetch(GOOGLE_SCRIPT_URL, {
       method: "POST",
       mode: "no-cors",
