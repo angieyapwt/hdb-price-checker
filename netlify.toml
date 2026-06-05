@@ -1,0 +1,8 @@
+[build]
+  publish = "app"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/hdb"
+  to = "/.netlify/functions/hdb-proxy"
+  status = 200
