@@ -582,7 +582,7 @@ function createPdf(report) {
   writer.wrap(report.insight, 72, 456, 443, 7.8, muted, 10.5);
 
   writer.text("LATEST 6 TRANSACTIONS", 54, 548, 8.5, blue, true);
-  writer.text("Data source: Live OneMap + data.gov.sg", 368, 548, 8.2, muted);
+  writer.textRight("Data source: Live OneMap + data.gov.sg", 541, 548, 8.2, muted);
   writer.line(54, 562, 541, 562, line);
 
   transactions.forEach((item, index) => {
@@ -591,7 +591,7 @@ function createPdf(report) {
     const rowMeta = `${safe(item.storey_range)} | ${safe(item.remaining_lease || "remaining lease unavailable")} | ${monthLabel(item.month)}`;
     writer.text(rowTitle, 54, y, 8.5, ink, true);
     writer.text(rowMeta, 54, y + 13, 7.8, muted);
-    writer.text(money(Number(item.resale_price)), 464, y + 4, 9.5, ink, true);
+    writer.textRight(money(Number(item.resale_price)), 541, y + 9, 9.5, ink, true);
     if (index < transactions.length - 1) writer.line(54, y + 23, 541, y + 23, "E8EEF9");
   });
 
@@ -613,6 +613,12 @@ class PdfWriter {
     const font = bold ? "F2" : "F1";
     const escaped = safe(text).replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
     this.commands.push(`BT /${font} ${size} Tf ${hex(color)} rg ${x} ${842 - y} Td (${escaped}) Tj ET`);
+  }
+
+  textRight(text, rightX, y, size = 12, color = "000000", bold = false) {
+    const content = safe(text);
+    const estimatedWidth = content.length * size * (bold ? 0.56 : 0.52);
+    this.text(content, rightX - estimatedWidth, y, size, color, bold);
   }
 
   wrap(text, x, y, width, size, color, lineHeight) {
