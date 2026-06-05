@@ -121,6 +121,8 @@ function inferAddressFromPostal(postalCode) {
     "09": "BUKIT MERAH",
     "51": "PASIR RIS",
     "52": "TAMPINES",
+    "54": "SENGKANG",
+    "55": "SERANGOON",
     "56": "ANG MO KIO",
     "73": "WOODLANDS",
     "31": "TOA PAYOH",
@@ -516,57 +518,76 @@ function downloadPdf(report, pdf) {
 function createPdf(report) {
   const writer = new PdfWriter();
   const blue = "153E9F";
+  const navy = "0A1B44";
+  const royal = "245BE8";
+  const lightBlue = "DDE9FF";
   const ink = "08142F";
   const muted = "64708B";
   const line = "DBE3F7";
-  const soft = "E8EFFF";
+  const soft = "F3F7FF";
+  const verySoft = "F8FAFF";
+  const address = `${titleCase(report.address.block)} ${titleCase(report.address.street)}`.trim();
+  const town = titleCase(report.address.town);
+  const latest = report.latest || {};
+  const transactions = [...(report.transactions || [])]
+    .sort((a, b) => String(b.month).localeCompare(String(a.month)))
+    .slice(0, 8);
 
-  writer.rect(0, 0, 595, 842, "F6F8FF");
-  writer.rect(36, 34, 523, 774, "FFFFFF");
-  writer.line(36, 132, 559, 132, line);
-  writer.text("HDB PRICE POSITION REPORT", 54, 66, 10, blue, true);
-  writer.text("Prepared for " + safe(report.lead.name), 54, 92, 24, ink, true);
-  writer.text(`${safe(report.postalCode)} | ${titleCase(report.flatType)} | ${report.storeyRange}`, 54, 116, 11, muted);
-  writer.text(monthLabel(report.generatedAt.toISOString().slice(0, 7)), 454, 66, 10, muted);
+  const tile = (x, y, w, h, label, value, note = "", fill = "FBFCFF") => {
+    writer.rect(x, y, w, h, fill);
+    writer.text(label.toUpperCase(), x + 12, y + 18, 7.5, muted, true);
+    writer.text(value, x + 12, y + 42, 15, ink, true);
+    if (note) writer.wrap(note, x + 12, y + 58, w - 24, 7.8, muted, 10);
+  };
 
-  writer.rect(54, 158, 226, 100, soft);
-  writer.text("Price Position", 72, 186, 10, blue, true);
-  writer.text(report.position, 72, 216, 26, ink, true);
-  writer.text("Market Confidence Score: " + report.score + " / 100", 72, 240, 11, muted);
+  writer.rect(0, 0, 595, 842, "F3F6FD");
+  writer.rect(30, 30, 535, 782, "FFFFFF");
+  writer.rect(30, 30, 535, 6, blue);
+  writer.text("HDB PRICE POSITION REPORT", 54, 60, 8.5, blue, true);
+  writer.text("Prepared for " + safe(report.lead.name), 54, 84, 20, ink, true);
+  writer.text("Postal code: " + safe(report.postalCode) + "  |  Address: " + address + ", " + town, 54, 106, 9.2, muted);
+  writer.text(`${titleCase(report.flatType)} | ${report.storeyRange} | Generated ${monthLabel(report.generatedAt.toISOString().slice(0, 7))}`, 54, 122, 8.6, muted);
 
-  writer.rect(304, 158, 201, 100, "FBFCFF");
-  writer.text("Target Selling Price", 322, 186, 10, blue, true);
-  writer.text(money(report.targetPrice), 322, 216, 26, ink, true);
-  writer.text("Compared against public resale transactions", 322, 240, 10, muted);
+  writer.rect(54, 145, 487, 74, lightBlue);
+  writer.rect(54, 145, 210, 74, "D8E7FF");
+  writer.rect(264, 145, 150, 74, "7EA5FF");
+  writer.rect(414, 145, 127, 74, navy);
+  writer.text("PRICE POSITION", 72, 166, 7.5, blue, true);
+  writer.text(report.position, 72, 194, 24, ink, true);
+  writer.text("Confidence score", 435, 168, 7.5, "FFFFFF", true);
+  writer.text(report.score + " / 100", 435, 195, 21, "FFFFFF", true);
 
-  const metrics = [
-    ["Recent Market Range", money(report.min) + " - " + money(report.max)],
-    ["Median Nearby Price", money(report.median)],
-    ["Suggested Range", money(report.negotiation.lower) + " - " + money(report.negotiation.upper)],
-    ["Price Gap vs Median", (report.gap >= 0 ? "+" : "-") + money(Math.abs(report.gap))]
-  ];
-  let y = 292;
-  metrics.forEach((metric, index) => {
-    const x = index % 2 === 0 ? 54 : 304;
-    if (index === 2) y += 86;
-    writer.rect(x, y, 226, 64, "FBFCFF");
-    writer.text(metric[0], x + 16, y + 24, 9, muted, true);
-    writer.text(metric[1], x + 16, y + 48, 18, ink, true);
+  tile(54, 240, 153, 68, "Target selling price", money(report.targetPrice), "Client's intended asking price.", soft);
+  tile(221, 240, 153, 68, "Recent market range", `${money(report.min)} - ${money(report.max)}`, "Based on comparable resale records.", verySoft);
+  tile(388, 240, 153, 68, "Latest transaction", money(Number(latest.resale_price || 0)), `${titleCase(latest.flat_type || report.flatType)}, ${latest.storey_range || report.storeyRange}`, verySoft);
+
+  tile(54, 322, 153, 68, "Median comparable", money(report.median), "Middle point of the comparison set.", verySoft);
+  tile(221, 322, 153, 68, "Price gap analysis", `${report.gap >= 0 ? "+" : "-"}${money(Math.abs(report.gap))}`, "Against the median comparable price.", verySoft);
+  tile(388, 322, 153, 68, "Suggested negotiation range", `${money(report.negotiation.lower)} - ${money(report.negotiation.upper)}`, "Range to guide buyer discussion.", soft);
+
+  writer.rect(54, 414, 487, 82, "EAF1FF");
+  writer.rect(54, 414, 4, 82, blue);
+  writer.text("ADVISORY INSIGHT", 72, 436, 8, blue, true);
+  writer.wrap(report.insight, 72, 456, 443, 8.8, muted, 12);
+
+  writer.text("LATEST 8 TRANSACTIONS", 54, 528, 8.5, blue, true);
+  writer.text("Data source: Live OneMap + data.gov.sg", 368, 528, 8.2, muted);
+  writer.line(54, 542, 541, 542, line);
+
+  transactions.forEach((item, index) => {
+    const y = 562 + index * 27;
+    const rowTitle = `Blk ${safe(item.block)} ${titleCase(item.street_name || item.town)}`;
+    const rowMeta = `${safe(item.storey_range)} | ${safe(item.remaining_lease || "remaining lease unavailable")} | ${monthLabel(item.month)}`;
+    writer.text(rowTitle, 54, y, 8.5, ink, true);
+    writer.text(rowMeta, 54, y + 13, 7.8, muted);
+    writer.text(money(Number(item.resale_price)), 464, y + 4, 9.5, ink, true);
+    if (index < transactions.length - 1) writer.line(54, y + 21, 541, y + 21, "E8EEF9");
   });
 
-  writer.text("Advisory Insight", 54, 490, 14, ink, true);
-  writer.wrap(report.insight, 54, 516, 487, 12, muted, 18);
-
-  writer.text("Latest Comparable Transaction", 54, 610, 14, ink, true);
-  const latestLine = `${titleCase(report.latest.flat_type)} flat at ${titleCase(report.latest.town)}, ${report.latest.storey_range}, ${monthLabel(report.latest.month)}, ${report.latest.remaining_lease || "remaining lease unavailable"}`;
-  writer.wrap(latestLine, 54, 636, 487, 11, muted, 16);
-  writer.wrap("Suggested negotiation range: " + money(report.negotiation.lower) + " - " + money(report.negotiation.upper), 54, 666, 487, 10, muted, 14);
-  writer.wrap("Data source: " + (report.dataSource || "Public resale transaction comparison"), 54, 688, 487, 9, muted, 13);
-
-  writer.line(54, 704, 541, 704, line);
-  writer.wrap("Prepared using public HDB resale transaction fields from data.gov.sg. Resale prices are indicative and final pricing should also consider unit condition, renovation, facing, floor level, ethnic quota, buyer demand, and competing supply.", 54, 728, 487, 9, muted, 13);
-  writer.text("Contact details submitted: " + safe(report.lead.email) + " | " + safe(report.lead.mobile), 54, 774, 9, muted);
-  writer.text("Urgent enquiries: " + URGENT_CONTACT, 54, 790, 9, muted);
+  writer.line(54, 786, 541, 786, line);
+  writer.wrap("This report uses public HDB resale transaction fields and is indicative only. Final pricing should also consider unit condition, renovation, facing, floor level, remaining lease, ethnic quota, buyer demand, and competing supply.", 54, 802, 487, 7.2, muted, 10);
+  writer.text("Book a personalised HDB pricing discussion", 54, 824, 8.2, blue, true);
+  writer.text("Angie Yap | CEA Reg: R067805D | Whatsapp: +65 83963088", 262, 824, 8.2, ink, true);
 
   return writer.output();
 }
