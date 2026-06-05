@@ -195,35 +195,43 @@ function loadJsonp(url, params, timeoutMs = LIVE_LOOKUP_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const callbackName = `hdbCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const script = document.createElement("script");
+    let settled = false;
     const timeout = window.setTimeout(() => {
-      cleanup();
-      reject(new Error("Live lookup timed out"));
+      finish(() => reject(new Error("Live lookup timed out")));
     }, timeoutMs);
 
     const requestUrl = new URL(url);
     Object.entries(params).forEach(([key, value]) => requestUrl.searchParams.set(key, value));
     requestUrl.searchParams.set("callback", callbackName);
+    requestUrl.searchParams.set("_", Date.now());
 
     window[callbackName] = (data) => {
-      cleanup();
-      if (data?.error) {
-        reject(new Error(data.error));
-        return;
-      }
-      resolve(data);
+      finish(() => {
+        if (data?.error) {
+          reject(new Error(data.error));
+          return;
+        }
+        resolve(data);
+      });
     };
 
     script.onerror = () => {
-      cleanup();
-      reject(new Error("Live lookup failed"));
+      window.setTimeout(() => {
+        finish(() => reject(new Error("Live lookup failed")));
+      }, 5000);
     };
 
-    function cleanup() {
+    function finish(callback) {
+      if (settled) return;
+      settled = true;
       window.clearTimeout(timeout);
       delete window[callbackName];
       script.remove();
+      callback();
     }
 
+    script.async = true;
+    script.referrerPolicy = "no-referrer";
     script.src = requestUrl.toString();
     document.body.appendChild(script);
   });
