@@ -305,12 +305,13 @@ function getPosition(target, median, p25, p75, min, max) {
 
 function getInsight(position, pctVsMedian) {
   const percentageGap = Math.abs(pctVsMedian * 100).toFixed(1);
+  const leaseNote = "Remaining lease also affects pricing; older estates and shorter leases may face lease decay, which can reduce buyer demand and valuation even when recent transactions look supportive.";
   const insights = {
-    "Below Market": `Your target price is about ${percentageGap}% below the median of the comparison set. This can attract more buyer attention, but you may want to confirm that you are not leaving value on the table before listing.`,
-    "Fair Market": `Your target price is aligned with recent HDB resale transactions. This is a realistic range if your unit condition, floor level, layout, and presentation are competitive.`,
-    "Slightly Above Market": `Your target price is about ${percentageGap}% above the median of the comparison set. It may still be achievable if the unit has strong attributes such as higher floor, better facing, strong renovation condition, or convenient amenities.`,
-    "Ambitious": `Your target price is above recent market evidence. A premium may be possible, but buyers will need clear reasons to justify it, and the listing strategy must be more deliberate.`,
-    "High Risk": `Your target price is meaningfully above recent transaction support. This may reduce buyer enquiries unless the unit has standout qualities or the market has moved ahead of the latest registered transactions.`
+    "Below Market": `Your target price is about ${percentageGap}% below the median of the comparison set. This can attract more buyer attention, but you may want to confirm that you are not leaving value on the table before listing. ${leaseNote}`,
+    "Fair Market": `Your target price is aligned with recent HDB resale transactions. This is a realistic range if your unit condition, floor level, layout, presentation, and remaining lease are competitive. ${leaseNote}`,
+    "Slightly Above Market": `Your target price is about ${percentageGap}% above the median of the comparison set. It may still be achievable if the unit has strong attributes such as higher floor, better facing, strong renovation condition, convenient amenities, or stronger remaining lease. ${leaseNote}`,
+    "Ambitious": `Your target price is above recent market evidence. A premium may be possible, but buyers will need clear reasons to justify it, and the listing strategy must be more deliberate. ${leaseNote}`,
+    "High Risk": `Your target price is meaningfully above recent transaction support. This may reduce buyer enquiries unless the unit has standout qualities or the market has moved ahead of the latest registered transactions. ${leaseNote}`
   };
   return insights[position];
 }
@@ -359,8 +360,11 @@ function renderAnalysis(report) {
   document.querySelector("#insightCopy").textContent = report.insight;
   document.querySelector("#rangeLow").textContent = money(report.p25);
   document.querySelector("#rangeHigh").textContent = money(report.p75);
-  document.querySelector("#priceMarker").style.left = `${getMarkerPosition(report.targetPrice, report.min, report.max)}%`;
-  document.querySelector("#priceMarker").classList.toggle("is-edge", getMarkerPosition(report.targetPrice, report.min, report.max) > 88);
+  const markerPosition = getMarkerPosition(report.targetPrice, report.min, report.max);
+  const marker = document.querySelector("#priceMarker");
+  marker.style.left = `${markerPosition}%`;
+  marker.classList.toggle("is-low-edge", markerPosition < 12);
+  marker.classList.toggle("is-high-edge", markerPosition > 88);
   document.querySelector("#negotiationRange").textContent = `${money(report.negotiation.lower)} - ${money(report.negotiation.upper)}`;
   document.querySelector("#negotiationCopy").textContent = getNegotiationCopy(report);
   renderTransactions(report);
