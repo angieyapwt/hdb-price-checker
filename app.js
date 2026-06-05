@@ -583,20 +583,20 @@ function createPdf(report) {
 
   writer.text("LATEST 6 TRANSACTIONS", 54, 548, 8.5, blue, true);
   writer.textRight("Data source: Live OneMap + data.gov.sg", 541, 548, 8.2, muted);
-  writer.line(54, 562, 541, 562, line);
+  writer.line(54, 564, 541, 564, line);
 
   transactions.forEach((item, index) => {
-    const y = 584 + index * 30;
+    const y = 586 + index * 32;
     const rowTitle = `Blk ${safe(item.block)} ${titleCase(item.street_name || item.town)}`;
     const rowMeta = `${safe(item.storey_range)} | ${safe(item.remaining_lease || "remaining lease unavailable")} | ${monthLabel(item.month)}`;
     writer.text(rowTitle, 54, y, 8.5, ink, true);
     writer.text(rowMeta, 54, y + 13, 7.8, muted);
     writer.textRight(money(Number(item.resale_price)), 541, y + 9, 9.5, ink, true);
-    if (index < transactions.length - 1) writer.line(54, y + 23, 541, y + 23, "E8EEF9");
+    if (index < transactions.length - 1) writer.line(54, y + 26, 541, y + 26, "E8EEF9");
   });
 
-  writer.line(54, 772, 541, 772, line);
-  writer.wrap("This report uses public HDB resale transaction fields and is indicative only. Final pricing should also consider unit condition, renovation, facing, floor level, remaining lease, ethnic quota, buyer demand, and competing supply.", 54, 790, 487, 7, muted, 10);
+  writer.line(54, 786, 541, 786, line);
+  writer.wrap("This report uses public HDB resale transaction fields and is indicative only. Final pricing should also consider unit condition, renovation, facing, floor level, remaining lease, ethnic quota, buyer demand, and competing supply.", 54, 800, 487, 6.6, muted, 9);
   writer.text("Book a personalised HDB pricing discussion", 54, 824, 8, blue, true);
   writer.text("Angie Yap | CEA Reg: R067805D | Whatsapp: +65 83963088", 262, 824, 8, ink, true);
 
