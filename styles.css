@@ -404,7 +404,6 @@ h2 {
 }
 
 .range-card,
-.negotiation-card,
 .transactions-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -424,8 +423,7 @@ h2 {
   overflow: visible;
 }
 
-.range-values strong,
-.negotiation-card strong {
+.range-values strong {
   color: var(--ink);
   font-size: clamp(1.15rem, 2vw, 1.5rem);
 }
@@ -489,12 +487,6 @@ h2 {
   margin-top: 10px;
   color: var(--muted);
   font-size: 0.8rem;
-}
-
-.negotiation-card p {
-  margin: 12px 0 0;
-  color: var(--muted);
-  line-height: 1.45;
 }
 
 .transactions-panel {

@@ -367,8 +367,6 @@ function renderAnalysis(report) {
   marker.style.left = `${markerPosition}%`;
   marker.classList.toggle("is-low-edge", markerPosition < 12);
   marker.classList.toggle("is-high-edge", markerPosition > 88);
-  document.querySelector("#negotiationRange").textContent = `${money(report.negotiation.lower)} - ${money(report.negotiation.upper)}`;
-  document.querySelector("#negotiationCopy").textContent = getNegotiationCopy(report);
   renderTransactions(report);
 }
 
@@ -421,7 +419,7 @@ function getNegotiationCopy(report) {
 function renderTransactions(report) {
   const transactions = [...report.transactions]
     .sort((a, b) => String(b.month).localeCompare(String(a.month)))
-    .slice(0, 8);
+    .slice(0, 6);
 
   document.querySelector("#transactionsTitle").textContent = `Recent sales in ${titleCase(report.address.town || "this area")}`;
   document.querySelector("#transactionsCount").textContent = `${transactions.length} records`;
@@ -485,7 +483,7 @@ async function sendLeadToSheet(report, pdf) {
     priceGapVsMedian: report.gap,
     suggestedNegotiationRange: `${money(report.negotiation.lower)} - ${money(report.negotiation.upper)}`,
     advisoryInsight: report.insight,
-    pdfFileName: `HDB-Price-Position-Report-${report.postalCode}.pdf`,
+    pdfFileName: getReportFileName(report),
     pdfBase64: btoa(pdf),
     sourcePage: window.location.href
   };
@@ -508,11 +506,25 @@ function downloadPdf(report, pdf) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `HDB-Price-Position-Report-${report.postalCode}.pdf`;
+  link.download = getReportFileName(report);
   document.body.appendChild(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function getReportFileName(report) {
+  const clientName = safeFilePart(report.lead?.name || "Client");
+  const postalCode = safeFilePart(report.postalCode || "PostalCode");
+  return `HDB-Price-Position-Report-${postalCode}-${clientName}.pdf`;
+}
+
+function safeFilePart(value) {
+  return String(value || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60) || "Client";
 }
 
 function createPdf(report) {
@@ -531,7 +543,7 @@ function createPdf(report) {
   const latest = report.latest || {};
   const transactions = [...(report.transactions || [])]
     .sort((a, b) => String(b.month).localeCompare(String(a.month)))
-    .slice(0, 8);
+    .slice(0, 6);
 
   const tile = (x, y, w, h, label, value, note = "", fill = "FBFCFF") => {
     writer.rect(x, y, w, h, fill);
@@ -561,33 +573,32 @@ function createPdf(report) {
   tile(221, 240, 153, 68, "Recent market range", `${money(report.min)} - ${money(report.max)}`, "Based on comparable resale records.", verySoft);
   tile(388, 240, 153, 68, "Latest transaction", money(Number(latest.resale_price || 0)), `${titleCase(latest.flat_type || report.flatType)}, ${latest.storey_range || report.storeyRange}`, verySoft);
 
-  tile(54, 322, 153, 68, "Median comparable", money(report.median), "Middle point of the comparison set.", verySoft);
-  tile(221, 322, 153, 68, "Price gap analysis", `${report.gap >= 0 ? "+" : "-"}${money(Math.abs(report.gap))}`, "Against the median comparable price.", verySoft);
-  tile(388, 322, 153, 68, "Suggested negotiation range", `${money(report.negotiation.lower)} - ${money(report.negotiation.upper)}`, "Range to guide buyer discussion.", soft);
+  tile(54, 322, 236, 68, "Median comparable", money(report.median), "Middle point of the comparison set.", verySoft);
+  tile(305, 322, 236, 68, "Price gap analysis", `${report.gap >= 0 ? "+" : "-"}${money(Math.abs(report.gap))}`, "Against the median comparable price.", verySoft);
 
-  writer.rect(54, 414, 487, 82, "EAF1FF");
-  writer.rect(54, 414, 4, 82, blue);
+  writer.rect(54, 414, 487, 104, "EAF1FF");
+  writer.rect(54, 414, 4, 104, blue);
   writer.text("ADVISORY INSIGHT", 72, 436, 8, blue, true);
-  writer.wrap(report.insight, 72, 456, 443, 8.8, muted, 12);
+  writer.wrap(report.insight, 72, 456, 443, 7.8, muted, 10.5);
 
-  writer.text("LATEST 8 TRANSACTIONS", 54, 528, 8.5, blue, true);
-  writer.text("Data source: Live OneMap + data.gov.sg", 368, 528, 8.2, muted);
-  writer.line(54, 542, 541, 542, line);
+  writer.text("LATEST 6 TRANSACTIONS", 54, 548, 8.5, blue, true);
+  writer.text("Data source: Live OneMap + data.gov.sg", 368, 548, 8.2, muted);
+  writer.line(54, 562, 541, 562, line);
 
   transactions.forEach((item, index) => {
-    const y = 562 + index * 27;
+    const y = 584 + index * 30;
     const rowTitle = `Blk ${safe(item.block)} ${titleCase(item.street_name || item.town)}`;
     const rowMeta = `${safe(item.storey_range)} | ${safe(item.remaining_lease || "remaining lease unavailable")} | ${monthLabel(item.month)}`;
     writer.text(rowTitle, 54, y, 8.5, ink, true);
     writer.text(rowMeta, 54, y + 13, 7.8, muted);
     writer.text(money(Number(item.resale_price)), 464, y + 4, 9.5, ink, true);
-    if (index < transactions.length - 1) writer.line(54, y + 21, 541, y + 21, "E8EEF9");
+    if (index < transactions.length - 1) writer.line(54, y + 23, 541, y + 23, "E8EEF9");
   });
 
-  writer.line(54, 786, 541, 786, line);
-  writer.wrap("This report uses public HDB resale transaction fields and is indicative only. Final pricing should also consider unit condition, renovation, facing, floor level, remaining lease, ethnic quota, buyer demand, and competing supply.", 54, 802, 487, 7.2, muted, 10);
-  writer.text("Book a personalised HDB pricing discussion", 54, 824, 8.2, blue, true);
-  writer.text("Angie Yap | CEA Reg: R067805D | Whatsapp: +65 83963088", 262, 824, 8.2, ink, true);
+  writer.line(54, 772, 541, 772, line);
+  writer.wrap("This report uses public HDB resale transaction fields and is indicative only. Final pricing should also consider unit condition, renovation, facing, floor level, remaining lease, ethnic quota, buyer demand, and competing supply.", 54, 790, 487, 7, muted, 10);
+  writer.text("Book a personalised HDB pricing discussion", 54, 824, 8, blue, true);
+  writer.text("Angie Yap | CEA Reg: R067805D | Whatsapp: +65 83963088", 262, 824, 8, ink, true);
 
   return writer.output();
 }
