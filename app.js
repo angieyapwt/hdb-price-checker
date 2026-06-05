@@ -3,7 +3,7 @@ const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby6lrlclwzN1U
 const OWNER_EMAIL = "angieyapwt@gmail.com";
 const URGENT_CONTACT = "83963088";
 const LIVE_LOOKUP_TIMEOUT_MS = 90000;
-const LIVE_LOOKUP_RETRIES = 1;
+const LIVE_LOOKUP_RETRIES = 0;
 
 const postalDirectory = {
   "520123": { block: "123", street: "TAMPINES STREET 11", town: "TAMPINES" },
@@ -216,9 +216,8 @@ function loadJsonp(url, params, timeoutMs = LIVE_LOOKUP_TIMEOUT_MS) {
     };
 
     script.onerror = () => {
-      window.setTimeout(() => {
-        finish(() => reject(new Error("Live lookup failed")));
-      }, 5000);
+      // Mobile browsers can report an early script error during the Apps Script redirect.
+      // Let the callback or timeout decide so valid lookups do not fail immediately.
     };
 
     function finish(callback) {
